@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aim Trainer</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:rgba(255,255,255,0.06); --border:rgba(255,255,255,0.12);
+    --accent:#ff3b5c; --accent2:#3bd6ff; --text:#eef2f7; --muted:#9aa4b2;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%; margin:0;
+    background: radial-gradient(1200px 800px at 50% -10%, #16202f 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden; user-select:none; -webkit-user-select:none;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  #hud{
+    position:fixed; top:calc(14px + env(safe-area-inset-top,0px)); left:0; right:0;
+    display:flex; justify-content:center; gap:10px; z-index:10; pointer-events:none; flex-wrap:wrap;
+  }
+  .stat{
+    background:var(--panel); border:1px solid var(--border); backdrop-filter:blur(8px);
+    padding:8px 16px; border-radius:12px; font-size:13px; color:var(--muted); min-width:82px; text-align:center;
+  }
+  .stat b{display:block; font-size:19px; color:var(--text); font-weight:700; margin-top:2px;}
+  .stat.hits b{color:var(--accent2);} .stat.miss b{color:var(--accent);}
+  #arena{position:absolute; inset:0; cursor:crosshair;}
+  .target{
+    position:absolute; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffffff, var(--accent) 45%, #9c0e28 100%);
+    box-shadow:0 0 0 2px rgba(255,255,255,0.25), 0 6px 20px rgba(255,59,92,0.45);
+    transform:scale(0); animation:pop 120ms ease-out forwards; cursor:pointer;
+  }
+  .target::after{content:""; position:absolute; inset:30%; border-radius:50%; background:rgba(255,255,255,0.85);}
+  @keyframes pop{from{transform:scale(0);} to{transform:scale(1);}}
+  .target.dying{animation:dying 140ms ease-in forwards; pointer-events:none;}
+  @keyframes dying{from{transform:scale(1);opacity:1;} to{transform:scale(1.5);opacity:0;}}
+  .target.expired{animation:expire 160ms ease-in forwards; pointer-events:none;}
+  @keyframes expire{from{transform:scale(1);opacity:1;} to{transform:scale(0.5);opacity:0;}}
+  #center{
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:20; text-align:center;
+    background:var(--panel); border:1px solid var(--border); backdrop-filter:blur(10px);
+    padding:26px 28px; border-radius:18px; max-width:min(440px,90vw); max-height:88vh; overflow-y:auto;
+  }
+  #center h1{margin:0 0 6px; font-size:24px; letter-spacing:0.5px;}
+  #center p{margin:0 0 16px; color:var(--muted); font-size:13.5px; line-height:1.5;}
+  .btn{
+    background:linear-gradient(135deg, var(--accent), #ff6b3b); color:white; border:none;
+    padding:12px 26px; font-size:16px; font-weight:700; border-radius:12px; cursor:pointer;
+    box-shadow:0 8px 20px rgba(255,59,92,0.35); transition:transform 100ms ease; width:100%;
+  }
+  .btn:active{transform:scale(0.97);}
+  .grouplabel{font-size:12px; color:var(--muted); text-align:left; margin:14px 0 6px; text-transform:uppercase; letter-spacing:0.5px;}
+  .row{display:flex; gap:8px; justify-content:center;}
+  .chip{
+    background:transparent; border:1px solid var(--border); color:var(--muted);
+    padding:8px 12px; border-radius:10px; font-size:13px; cursor:pointer; flex:1;
+  }
+  .chip.active{border-color:var(--accent2); color:var(--accent2); background:rgba(59,214,255,0.08);}
+  .sizewrap{display:flex; align-items:center; gap:10px;}
+  .sizewrap input[type=range]{
+    flex:1; -webkit-appearance:none; appearance:none; height:6px; border-radius:4px;
+    background:rgba(255,255,255,0.12); outline:none;
+  }
+  .sizewrap input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:20px; height:20px; border-radius:50%;
+    background:var(--accent2); cursor:pointer; box-shadow:0 0 0 4px rgba(59,214,255,0.15);
+  }
+  .sizewrap input[type=range]::-moz-range-thumb{
+    width:20px; height:20px; border-radius:50%; background:var(--accent2); border:none; cursor:pointer;
+  }
+  .sizewrap input[type=number]{
+    width:64px; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:6px 8px; font-size:14px; text-align:center;
+  }
+  #hintKey{
+    position:fixed; bottom:calc(14px + env(safe-area-inset-bottom,0px)); left:0; right:0;
+    text-align:center; font-size:12px; color:var(--muted); z-index:10; pointer-events:none;
+  }
+  #hintKey b{color:var(--text);}
+  .senswrap{
+    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px; margin-top:6px;
+  }
+  .sensfield{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
+  .sensfield label{font-size:13px; color:var(--text); text-align:left;}
+  .sensfield input[type=number]{
+    width:88px; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:6px 8px; font-size:14px; text-align:right;
+  }
+  .cm360{font-size:12.5px; color:var(--accent2); text-align:left; margin-top:4px;}
+  .togglerow{display:flex; align-items:center; gap:8px; margin-top:10px; text-align:left;}
+  .togglerow label{font-size:12.5px; color:var(--muted);}
+  #result{display:none;}
+  #result .big{font-size:42px; font-weight:800; color:var(--accent2); margin:6px 0 2px;}
+  #result .sub{color:var(--muted); font-size:14px; margin-bottom:16px;}
+  #crosshair{
+    position:fixed; width:22px; height:22px; pointer-events:none; z-index:15;
+    transform:translate(-50%,-50%); display:none;
+  }
+  #crosshair::before,#crosshair::after{content:""; position:absolute; background:var(--accent2);}
+  #crosshair::before{left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%);}
+  #crosshair::after{top:50%; left:0; right:0; height:2px; transform:translateY(-50%);}
+  #resumeOverlay{
+    display:none; position:fixed; inset:0; z-index:25; background:rgba(0,0,0,0.55);
+    align-items:center; justify-content:center; text-align:center; color:var(--text); font-size:16px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="stat hits"><span>İsabet</span><b id="hitCount">0</b></div>
+  <div class="stat"><span>Süre</span><b id="timeLeft">30</b></div>
+  <div class="stat miss"><span>Iska</span><b id="missCount">0</b></div>
+  <div class="stat"><span>Doğruluk</span><b id="acc">100%</b></div>
+</div>
+
+<div id="arena"></div>
+<div id="crosshair"></div>
+<div id="resumeOverlay">🖱️ Fareyi kilitlemek ve devam etmek için tıkla</div>
+<div id="hintKey"><b>R</b> — Ana menüye dön</div>
+
+<div id="center">
+  <div id="intro">
+    <h1>🎯 Aim Trainer</h1>
+    <p>Beliren daireleri vur. Ayarlarını Valorant'takiyle aynı yap, aynı hisle çalış.</p>
+
+    <div class="grouplabel">Zorluk (hedef süresi)</div>
+    <div class="row" id="diffRow">
+      <button class="chip" data-life="1400">Kolay</button>
+      <button class="chip active" data-life="1000">Orta</button>
+      <button class="chip" data-life="700">Zor</button>
+    </div>
+
+    <div class="grouplabel">Hedef Boyutu (0-100)</div>
+    <div class="sizewrap">
+      <input type="range" id="sizeSlider" min="0" max="100" value="35">
+      <input type="number" id="sizeNumber" min="0" max="100" value="35">
+    </div>
+
+    <div class="grouplabel">Fare Hassasiyeti (Valorant sens)</div>
+    <div class="senswrap">
+      <div class="sensfield">
+        <label>DPI</label>
+        <input type="number" id="dpiInput" value="800" min="100" max="30000" step="50">
+      </div>
+      <div class="sensfield">
+        <label>Valorant Sens</label>
+        <input type="number" id="sensInput" value="0.30" min="0.01" max="10" step="0.01">
+      </div>
+      <div class="cm360" id="cm360Out">≈ 42.3 cm/360°</div>
+      <div class="togglerow">
+        <input type="checkbox" id="sensModeToggle" checked>
+        <label for="sensModeToggle">Gerçek fare hareketiyle nişan al (pointer lock, sadece bilgisayar)</label>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;">
+      <button class="btn" id="startBtn">Başla</button>
+    </div>
+  </div>
+
+  <div id="result">
+    <h1>Bitti!</h1>
+    <div class="big" id="finalScore">0</div>
+    <div class="sub" id="finalDetail">isabet · doğruluk %0</div>
+    <button class="btn" id="restartBtn">Tekrar Oyna</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const arena = document.getElementById('arena');
+  const centerPanel = document.getElementById('center');
+  const introEl = document.getElementById('intro');
+  const resultEl = document.getElementById('result');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const diffRow = document.getElementById('diffRow');
+  const sizeSlider = document.getElementById('sizeSlider');
+  const sizeNumber = document.getElementById('sizeNumber');
+  const crosshair = document.getElementById('crosshair');
+  const resumeOverlay = document.getElementById('resumeOverlay');
+  const dpiInput = document.getElementById('dpiInput');
+  const sensInput = document.getElementById('sensInput');
+  const cm360Out = document.getElementById('cm360Out');
+  const sensModeToggle = document.getElementById('sensModeToggle');
+
+  const hitCountEl = document.getElementById('hitCount');
+  const missCountEl = document.getElementById('missCount');
+  const timeLeftEl = document.getElementById('timeLeft');
+  const accEl = document.getElementById('acc');
+  const finalScoreEl = document.getElementById('finalScore');
+  const finalDetailEl = document.getElementById('finalDetail');
+
+  const GAME_DURATION = 30;
+  const YAW_CONST = 0.07; // Valorant: derece / count, sens 1.0'da
+  const SPEED_SCALE = 3.0; // ham piksel hareketini oyun hissine ölçekler
+
+  const MIN_PX = 18, MAX_PX = 130;
+  function sizeFromPercent(p){ return Math.round(MIN_PX + (p/100)*(MAX_PX-MIN_PX)); }
+
+  let targetSize = sizeFromPercent(35), targetLife = 1000;
+  let hits = 0, misses = 0, timeLeft = GAME_DURATION;
+  let countdownTimer = null, running = false, activeTarget = null;
+
+  let sensMode = false, locked = false;
+  let cx = window.innerWidth/2, cy = window.innerHeight/2;
+
+  const supportsHover = window.matchMedia('(hover:hover)').matches;
+  const supportsLock = 'requestPointerLock' in document.documentElement;
+  if(!supportsHover || !supportsLock){
+    sensModeToggle.checked = false;
+    sensModeToggle.disabled = true;
+  }
+
+  function updateCm360(){
+    const dpi = Math.max(1, parseFloat(dpiInput.value) || 800);
+    const sens = Math.max(0.001, parseFloat(sensInput.value) || 0.3);
+    const cm = (360 * 2.54) / (sens * YAW_CONST * dpi);
+    cm360Out.textContent = '≈ ' + cm.toFixed(1) + ' cm/360°';
+  }
+  dpiInput.addEventListener('input', updateCm360);
+  sensInput.addEventListener('input', updateCm360);
+  updateCm360();
+
+  diffRow.addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if(!b) return;
+    [...diffRow.children].forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    targetLife = parseInt(b.dataset.life,10);
+  });
+  function applySizePercent(p){
+    p = Math.min(100, Math.max(0, p));
+    sizeSlider.value = p;
+    sizeNumber.value = p;
+    targetSize = sizeFromPercent(p);
+  }
+  sizeSlider.addEventListener('input', () => applySizePercent(parseInt(sizeSlider.value,10)));
+  sizeNumber.addEventListener('input', () => {
+    const v = parseInt(sizeNumber.value,10);
+    if(!isNaN(v)) applySizePercent(v);
+  });
+
+  function rand(min,max){ return Math.random()*(max-min)+min; }
+
+  function clearTarget(){
+    if(activeTarget){
+      if(activeTarget.timeout) clearTimeout(activeTarget.timeout);
+      if(activeTarget.el && activeTarget.el.parentNode) activeTarget.el.remove();
+    }
+    activeTarget = null;
+  }
+
+  function spawnTarget(){
+    if(!running) return;
+    clearTarget();
+    const rect = arena.getBoundingClientRect();
+    const pad = targetSize + 10;
+    const x = rand(pad, Math.max(pad+1, rect.width-pad));
+    const y = rand(pad, Math.max(pad+1, rect.height-pad));
+
+    const el = document.createElement('div');
+    el.className = 'target';
+    el.style.width = targetSize+'px';
+    el.style.height = targetSize+'px';
+    el.style.left = (x-targetSize/2)+'px';
+    el.style.top = (y-targetSize/2)+'px';
+
+    if(!sensMode){
+      el.addEventListener('pointerdown', onDirectHit);
+    }
+    arena.appendChild(el);
+
+    const timeout = setTimeout(()=>{
+      if(!running || !activeTarget || activeTarget.el !== el) return;
+      misses++; updateHud();
+      el.classList.add('expired'); activeTarget = null;
+      setTimeout(()=>el.remove(),180);
+      if(running) spawnTarget();
+    }, targetLife);
+
+    activeTarget = { el, timeout, x, y, r: targetSize/2 };
+  }
+
+  function registerHit(){
+    hits++; updateHud();
+    const el = activeTarget.el;
+    el.classList.add('dying');
+    clearTimeout(activeTarget.timeout);
+    activeTarget = null;
+    setTimeout(()=>el.remove(),150);
+    if(running) spawnTarget();
+  }
+
+  function onDirectHit(ev){
+    ev.preventDefault(); ev.stopPropagation();
+    if(!running || !activeTarget || activeTarget.el !== ev.currentTarget) return;
+    registerHit();
+  }
+
+  function onArenaMiss(ev){
+    if(!running || sensMode) return;
+    if(ev.target !== arena) return;
+    misses++; updateHud();
+  }
+
+  function onLockedMouseMove(e){
+    if(!running || !locked) return;
+    const dpi = Math.max(1, parseFloat(dpiInput.value) || 800);
+    const sens = Math.max(0.001, parseFloat(sensInput.value) || 0.3);
+    const factor = sens * (dpi/800) * SPEED_SCALE;
+    cx = Math.min(window.innerWidth, Math.max(0, cx + e.movementX*factor));
+    cy = Math.min(window.innerHeight, Math.max(0, cy + e.movementY*factor));
+    crosshair.style.left = cx+'px';
+    crosshair.style.top = cy+'px';
+  }
+
+  function onLockedMouseDown(e){
+    if(!running || !locked) return;
+    if(activeTarget){
+      const dx = cx - activeTarget.x, dy = cy - activeTarget.y;
+      if(Math.sqrt(dx*dx+dy*dy) <= activeTarget.r){
+        registerHit();
+        return;
+      }
+    }
+    misses++; updateHud();
+  }
+
+  function onPointerLockChange(){
+    locked = document.pointerLockElement === arena;
+    resumeOverlay.style.display = (running && !locked) ? 'flex' : 'none';
+  }
+
+  function updateHud(){
+    hitCountEl.textContent = hits;
+    missCountEl.textContent = misses;
+    const total = hits+misses;
+    accEl.textContent = (total===0?100:Math.round((hits/total)*100)) + '%';
+    timeLeftEl.textContent = timeLeft;
+  }
+
+  function startGame(){
+    hits=0; misses=0; timeLeft=GAME_DURATION; updateHud();
+    running = true;
+    centerPanel.style.display = 'none';
+
+    sensMode = sensModeToggle.checked && supportsHover && supportsLock;
+
+    if(sensMode){
+      cx = window.innerWidth/2; cy = window.innerHeight/2;
+      crosshair.style.left = cx+'px'; crosshair.style.top = cy+'px';
+      crosshair.style.display = 'block';
+      document.addEventListener('mousemove', onLockedMouseMove);
+      document.addEventListener('mousedown', onLockedMouseDown);
+      document.addEventListener('pointerlockchange', onPointerLockChange);
+      arena.requestPointerLock();
+    } else {
+      arena.addEventListener('pointerdown', onArenaMiss);
+      if(supportsHover){
+        crosshair.style.display = 'block';
+        document.addEventListener('pointermove', onFreeMouseMove);
+      }
+    }
+
+    spawnTarget();
+    countdownTimer = setInterval(()=>{
+      timeLeft--; timeLeftEl.textContent = timeLeft;
+      if(timeLeft<=0) endGame();
+    },1000);
+  }
+
+  function onFreeMouseMove(e){
+    crosshair.style.left = e.clientX+'px';
+    crosshair.style.top = e.clientY+'px';
+  }
+
+  function stopRunLoop(){
+    running = false;
+    clearInterval(countdownTimer);
+    clearTarget();
+    arena.removeEventListener('pointerdown', onArenaMiss);
+    document.removeEventListener('pointermove', onFreeMouseMove);
+    document.removeEventListener('mousemove', onLockedMouseMove);
+    document.removeEventListener('mousedown', onLockedMouseDown);
+    document.removeEventListener('pointerlockchange', onPointerLockChange);
+    resumeOverlay.style.display = 'none';
+    if(document.pointerLockElement) document.exitPointerLock();
+  }
+
+  function goToMenu(){
+    if(!running) return;
+    stopRunLoop();
+    crosshair.style.display = 'none';
+    resultEl.style.display = 'none';
+    introEl.style.display = 'block';
+    centerPanel.style.display = 'block';
+  }
+
+  document.addEventListener('keydown', e => {
+    if((e.key === 'r' || e.key === 'R') && running) goToMenu();
+  });
+
+  function endGame(){
+    stopRunLoop();
+    crosshair.style.display = 'none';
+
+    const total = hits+misses;
+    const acc = total===0?0:Math.round((hits/total)*100);
+    finalScoreEl.textContent = hits;
+    finalDetailEl.textContent = `isabet · doğruluk %${acc} · ${misses} ıska`;
+    introEl.style.display = 'none';
+    resultEl.style.display = 'block';
+    centerPanel.style.display = 'block';
+  }
+
+  resumeOverlay.addEventListener('click', ()=>{ if(running && sensMode) arena.requestPointerLock(); });
+
+  startBtn.addEventListener('click', ()=>{
+    introEl.style.display = 'none';
+    resultEl.style.display = 'none';
+    startGame();
+  });
+  restartBtn.addEventListener('click', ()=>{
+    resultEl.style.display = 'none';
+    introEl.style.display = 'block';
+    centerPanel.style.display = 'block';
+  });
+
+  updateHud();
+})();
+</script>
+
+</body>
+</html>
